@@ -52,7 +52,7 @@ public class SimpleLeshanServer {
         });
 
         System.out.println("Leshan server started...");
-
+        
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
             Scanner scanner = new Scanner(System.in);
@@ -199,26 +199,35 @@ public class SimpleLeshanServer {
     private static void writeResource(String endpoint, String resourcePath, String value) {
         System.out.println("Writing value '" + value + "' to resource " + resourcePath + " on device: " + endpoint);
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
-
+    
         if (registration != null) {
             try {
-                // Convert the value to an LwM2mNode with the appropriate content format
-                WriteRequest request = new WriteRequest(null, null, resourcePath, null, value);
+                // The resource ID in this case is 15 for /3/0/15
+                int resourceId = Integer.parseInt(resourcePath.split("/")[2]);
+                
+                // Create the LwM2mSingleResource with the given value as a string
+                LwM2mSingleResource resource = LwM2mSingleResource.newStringResource(resourceId, value);
+                
+                // Specify the write mode; REPLACE means completely replace the resource's value
+                WriteRequest.Mode mode = WriteRequest.Mode.REPLACE;
+                
+                // Create the write request
+                WriteRequest request = new WriteRequest(mode, null, resourcePath, resource);
                 WriteResponse response = server.send(registration, request);
-
+    
                 if (response.isSuccess()) {
-                    System.out.println("Write response from " + endpoint + ": " + response.getCode().toString());
+                    System.out.println("Write operation successful on " + endpoint + ": " + response.getCode().toString());
                 } else {
                     System.out.println("Failed to write resource: " + response.getCode() + " " + response.getErrorMessage());
                 }
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         } else {
             System.out.println("No device found with endpoint: " + endpoint);
         }
     }
-
+    
     private static void createInstance(String endpoint, String objectId, String instanceId) {
         System.out.println("Creating instance " + instanceId + " for object " + objectId + " on device: " + endpoint);
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
@@ -266,3 +275,4 @@ public class SimpleLeshanServer {
         }
     }
 }
+
