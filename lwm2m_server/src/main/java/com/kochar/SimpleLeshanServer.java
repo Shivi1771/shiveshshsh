@@ -6,22 +6,28 @@ import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.eclipse.leshan.core.node.LwM2mObjectInstance;
 import org.eclipse.leshan.core.node.LwM2mResource;
-import org.eclipse.leshan.core.node.LwM2mSingleResource;
+import org.eclipse.leshan.core.observation.CompositeObservation;
 import org.eclipse.leshan.core.observation.Observation;
+import org.eclipse.leshan.core.observation.SingleObservation;
 import org.eclipse.leshan.core.request.CreateRequest;
 import org.eclipse.leshan.core.request.DeleteRequest;
+import org.eclipse.leshan.core.request.DiscoverRequest;
 import org.eclipse.leshan.core.request.ExecuteRequest;
+import org.eclipse.leshan.core.request.ObserveRequest;
 import org.eclipse.leshan.core.request.ReadRequest;
 import org.eclipse.leshan.core.request.WriteRequest;
 import org.eclipse.leshan.core.response.CreateResponse;
 import org.eclipse.leshan.core.response.DeleteResponse;
+import org.eclipse.leshan.core.response.DiscoverResponse;
 import org.eclipse.leshan.core.response.ExecuteResponse;
+import org.eclipse.leshan.core.response.ObserveCompositeResponse;
+import org.eclipse.leshan.core.response.ObserveResponse;
 import org.eclipse.leshan.core.response.ReadResponse;
 import org.eclipse.leshan.core.response.WriteResponse;
 import org.eclipse.leshan.server.californium.LeshanServer;
 import org.eclipse.leshan.server.californium.LeshanServerBuilder;
+import org.eclipse.leshan.server.observation.ObservationListener;
 import org.eclipse.leshan.server.registration.Registration;
 import org.eclipse.leshan.server.registration.RegistrationListener;
 import org.eclipse.leshan.server.registration.RegistrationUpdate;
@@ -51,8 +57,37 @@ public class SimpleLeshanServer {
             }
         });
 
+        server.getObservationService().addListener(new ObservationListener() {
+            @Override
+            public void newObservation(Observation observation, Registration registration) {
+                System.out.println("New observation added: " + observation);
+            }
+
+            @Override
+            public void cancelled(Observation observation) {
+                System.out.println("Observation cancelled: " + observation);
+            }
+
+            @Override
+            public void onResponse(SingleObservation observation, Registration registration, ObserveResponse response) {
+                System.out.println("Single observation response: " + response.getContent());
+            }
+
+            @Override
+            public void onResponse(CompositeObservation observation, Registration registration, ObserveCompositeResponse response) {
+                // Print the entire response or explore its properties
+                System.out.println("Composite observation response received.");
+                System.out.println("Response details: " + response.toString());
+            }
+
+            @Override
+            public void onError(Observation observation, Registration registration, Exception error) {
+                System.err.println("Observation error: " + error.getMessage());
+            }
+        });
+
         System.out.println("Leshan server started...");
-        
+
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
             Scanner scanner = new Scanner(System.in);
@@ -60,6 +95,8 @@ public class SimpleLeshanServer {
                 String command = scanner.nextLine();
                 if (command.equalsIgnoreCase("listall")) {
                     listAllDevices(server);
+                } else if (command.equalsIgnoreCase("observe")) {
+                    observeDevice();
                 } else if (command.equalsIgnoreCase("reboot")) {
                     rebootDevice();
                 } else if (command.equalsIgnoreCase("rebootserver")) {
@@ -99,17 +136,57 @@ public class SimpleLeshanServer {
                     } else {
                         System.out.println("Invalid command format. Use 'delete <endpoint> <objectId/instanceId>'");
                     }
+                } else if (command.startsWith("discover ")) {
+                    String[] parts = command.split(" ", 3);
+                    if (parts.length == 3) {
+                        discoverResources(parts[1], parts[2]);
+                    } else {
+                        System.out.println("Invalid command format. Use 'discover <endpoint> <resource_path>'");
+                    }
                 }
             }
         });
     }
 
+    private static void createInstance(String endpoint, String objectId, String string) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'createInstance'");
+    }
+
+    // Method to list all registered devices
     private static void listAllDevices(LeshanServer server) {
         System.out.println("Listing all registered devices:");
         Iterator<Registration> iterator = server.getRegistrationService().getAllRegistrations();
         while (iterator.hasNext()) {
             Registration registration = iterator.next();
             System.out.println("Device: " + registration.getEndpoint());
+        }
+    }
+
+    // Method to observe a device resource for real-time monitoring
+    private static void observeDevice() {
+        System.out.println("Enter the endpoint of the device to observe:");
+        Scanner scanner = new Scanner(System.in);
+        String endpoint = scanner.nextLine();
+        Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
+
+        if (registration != null) {
+            System.out.println("Enter the resource path to observe (e.g., /3/0/13 for battery level):");
+            String resourcePath = scanner.nextLine();
+            try {
+                ObserveRequest request = new ObserveRequest(resourcePath);
+                ObserveResponse response = server.send(registration, request);
+
+                if (response.isSuccess()) {
+                    System.out.println("Observation setup successfully on " + endpoint);
+                } else {
+                    System.out.println("Failed to set up observation: " + response.getCode() + " " + response.getErrorMessage());
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("No device found with endpoint: " + endpoint);
         }
     }
 
@@ -137,6 +214,7 @@ public class SimpleLeshanServer {
         }
     }
 
+    // Method to reboot the server
     private static void rebootServer() {
         System.out.println("Rebooting the server...");
         Thread rebootThread = new Thread(() -> {
@@ -152,6 +230,7 @@ public class SimpleLeshanServer {
         rebootThread.start();
     }
 
+    // Method to deregister a device
     private static void deregisterDevice(String endpoint) {
         System.out.println("Triggering deregistration for device: " + endpoint);
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
@@ -174,8 +253,9 @@ public class SimpleLeshanServer {
         }
     }
 
+    // Method to read a resource
     private static void readResource(String endpoint, String resourcePath) {
-        System.out.println("Reading resource " + resourcePath + " from device: " + endpoint);
+        System.out.println("Reading resource " + resourcePath + " from device " + endpoint);
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
 
         if (registration != null) {
@@ -184,7 +264,7 @@ public class SimpleLeshanServer {
                 ReadResponse response = server.send(registration, request);
 
                 if (response.isSuccess()) {
-                    System.out.println("Read response from " + endpoint + ": " + response.getContent().toString());
+                    System.out.println("Resource value: " + response.getContent());
                 } else {
                     System.out.println("Failed to read resource: " + response.getCode() + " " + response.getErrorMessage());
                 }
@@ -196,52 +276,41 @@ public class SimpleLeshanServer {
         }
     }
 
+    // Method to write a resource
     private static void writeResource(String endpoint, String resourcePath, String value) {
-        System.out.println("Writing value '" + value + "' to resource " + resourcePath + " on device: " + endpoint);
+        System.out.println("Writing value " + value + " to resource " + resourcePath + " on device " + endpoint);
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
-    
+
         if (registration != null) {
             try {
-                // The resource ID in this case is 15 for /3/0/15
-                int resourceId = Integer.parseInt(resourcePath.split("/")[2]);
-                
-                // Create the LwM2mSingleResource with the given value as a string
-                LwM2mSingleResource resource = LwM2mSingleResource.newStringResource(resourceId, value);
-                
-                // Specify the write mode; REPLACE means completely replace the resource's value
-                WriteRequest.Mode mode = WriteRequest.Mode.REPLACE;
-                
-                // Create the write request
-                WriteRequest request = new WriteRequest(mode, null, resourcePath, resource);
+                WriteRequest request = new WriteRequest(null, null, resourcePath, null, value);
                 WriteResponse response = server.send(registration, request);
-    
+
                 if (response.isSuccess()) {
-                    System.out.println("Write operation successful on " + endpoint + ": " + response.getCode().toString());
+                    System.out.println("Resource updated successfully.");
                 } else {
                     System.out.println("Failed to write resource: " + response.getCode() + " " + response.getErrorMessage());
                 }
-            } catch (Exception e) {
+            } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         } else {
             System.out.println("No device found with endpoint: " + endpoint);
         }
     }
-    
-    private static void createInstance(String endpoint, String objectId, String instanceId) {
-        System.out.println("Creating instance " + instanceId + " for object " + objectId + " on device: " + endpoint);
+
+    // Method to create a new instance
+    private static void createInstance(String endpoint, String objectId, Collection<LwM2mResource> parts) {
+        System.out.println("Creating new instance " + parts + " for object " + objectId + " on device " + endpoint);
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
 
         if (registration != null) {
             try {
-                // Adjust the resources and values as per your specific object requirements
-                LwM2mResource resource = LwM2mSingleResource.newStringResource(0, "NewValue"); // Example single resource
-                LwM2mObjectInstance instance = new LwM2mObjectInstance(Integer.parseInt(instanceId), resource);
-                CreateRequest request = new CreateRequest("/" + objectId, instance);
+                CreateRequest request = new CreateRequest(objectId, parts);
                 CreateResponse response = server.send(registration, request);
 
                 if (response.isSuccess()) {
-                    System.out.println("Create instance response from " + endpoint + ": " + response.getCode().toString());
+                    System.out.println("Instance created successfully.");
                 } else {
                     System.out.println("Failed to create instance: " + response.getCode() + " " + response.getErrorMessage());
                 }
@@ -253,17 +322,18 @@ public class SimpleLeshanServer {
         }
     }
 
-    private static void deleteInstance(String endpoint, String objectPath) {
-        System.out.println("Deleting instance at " + objectPath + " from device: " + endpoint);
+    // Method to delete an instance
+    private static void deleteInstance(String endpoint, String objectIdOrInstanceId) {
+        System.out.println("Deleting instance " + objectIdOrInstanceId + " from device " + endpoint);
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
 
         if (registration != null) {
             try {
-                DeleteRequest request = new DeleteRequest(objectPath);
+                DeleteRequest request = new DeleteRequest(objectIdOrInstanceId);
                 DeleteResponse response = server.send(registration, request);
 
                 if (response.isSuccess()) {
-                    System.out.println("Delete response from " + endpoint + ": " + response.getCode().toString());
+                    System.out.println("Instance deleted successfully.");
                 } else {
                     System.out.println("Failed to delete instance: " + response.getCode() + " " + response.getErrorMessage());
                 }
@@ -274,5 +344,27 @@ public class SimpleLeshanServer {
             System.out.println("No device found with endpoint: " + endpoint);
         }
     }
-}
 
+    // Method to discover resources
+    private static void discoverResources(String endpoint, String resourcePath) {
+        System.out.println("Discovering resources at path " + resourcePath + " on device " + endpoint);
+        Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
+
+        if (registration != null) {
+            try {
+                DiscoverRequest request = new DiscoverRequest(resourcePath);
+                DiscoverResponse response = server.send(registration, request);
+
+                if (response.isSuccess()) {
+                    System.out.println("Resources discovered: " + response.getCode());
+                } else {
+                    System.out.println("Failed to discover resources: " + response.getCode() + " " + response.getErrorMessage());
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("No device found with endpoint: " + endpoint);
+        }
+    }
+}

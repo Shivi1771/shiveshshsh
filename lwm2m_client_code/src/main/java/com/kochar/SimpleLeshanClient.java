@@ -3,6 +3,9 @@ package com.kochar;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.eclipse.leshan.client.californium.LeshanClient;
 import org.eclipse.leshan.client.californium.LeshanClientBuilder;
@@ -15,7 +18,6 @@ import org.eclipse.leshan.core.LwM2mId;
 import org.eclipse.leshan.core.node.LwM2mResource;
 import org.eclipse.leshan.core.node.LwM2mSingleResource;
 import org.eclipse.leshan.core.request.BindingMode;
-import org.eclipse.leshan.core.response.ExecuteResponse;
 import org.eclipse.leshan.core.response.ReadResponse;
 import org.eclipse.leshan.core.response.WriteResponse;
 
@@ -38,6 +40,7 @@ public class SimpleLeshanClient {
         client.start();
 
         System.out.println("Leshan client started. Endpoint: " + endpoint);
+        printHelp();                                                                                                
 
         // Command-line interface
         Scanner scanner = new Scanner(System.in);
@@ -57,6 +60,8 @@ public class SimpleLeshanClient {
                 collectResources(Integer.parseInt(parts[1]));
             } else if (parts[0].equalsIgnoreCase("move") && parts.length == 3) {
                 moveObject(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+            } else if (parts[0].equalsIgnoreCase("help")) {
+                printHelp();
             } else if (parts[0].equalsIgnoreCase("exit")) {
                 client.stop(true);
                 System.exit(0);
@@ -120,129 +125,114 @@ public class SimpleLeshanClient {
     private static void deleteObject(int objectId) {
         if (devices.containsKey(objectId)) {
             devices.remove(objectId);
-            System.out.println("Deleted object with ID: " + objectId);
+            System.out.println("Deleted device instance with ID: " + objectId);
         } else {
-            System.out.println("No object found with ID: " + objectId);
+            System.out.println("No device instance found with ID: " + objectId);
         }
     }
 
-    private static void updateObject(int objectId, int resourceId, String newValue) {
+    private static void updateObject(int objectId, int resourceId, String value) {
         CustomDevice device = devices.get(objectId);
         if (device != null) {
-            // Create an instance of LwM2mSingleResource
-            LwM2mSingleResource resource = LwM2mSingleResource.newStringResource(resourceId, newValue);
-            WriteResponse response = device.write(null, resourceId, resource);
-            if (response.isSuccess()) {
-                System.out.println("Updated resource " + resourceId + " of object with ID: " + objectId);
-            } else {
-                System.out.println("Failed to update resource " + resourceId + " of object with ID: " + objectId);
-            }
+            device.updateResource(resourceId, value);
+            System.out.println("Updated device instance with ID: " + objectId);
         } else {
-            System.out.println("No object found with ID: " + objectId);
+            System.out.println("No device instance found with ID: " + objectId);
         }
     }
 
     private static void collectResources(int objectId) {
         CustomDevice device = devices.get(objectId);
         if (device != null) {
-            // Collect all resources of the device into a single resource
-            Map<Integer, String> resources = device.getResources();
-            // Create a collected resource data
-            StringBuilder collectedData = new StringBuilder();
-            for (Map.Entry<Integer, String> entry : resources.entrySet()) {
-                collectedData.append("Resource ID ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
-            }
-
-            // Create a LwM2mSingleResource to hold collected data
-            LwM2mSingleResource collectedResource = LwM2mSingleResource.newStringResource(9999, collectedData.toString());
-
-            // Use the collected resource data (e.g., print it)
-            System.out.println("Collected resources for object ID " + objectId + ":");
-            System.out.println(collectedData.toString());
+            device.collectResources();
+            System.out.println("Collected resources for device instance with ID: " + objectId);
         } else {
-            System.out.println("No object found with ID: " + objectId);
+            System.out.println("No device instance found with ID: " + objectId);
         }
     }
 
     private static void moveObject(int fromObjectId, int toObjectId) {
-        CustomDevice device = devices.get(fromObjectId);
-        if (device != null) {
-            // Move the device to the new ID
-            devices.remove(fromObjectId);
-            devices.put(toObjectId, device);
-            System.out.println("Moved object from ID " + fromObjectId + " to ID " + toObjectId);
+        CustomDevice fromDevice = devices.get(fromObjectId);
+        CustomDevice toDevice = devices.get(toObjectId);
+        if (fromDevice != null && toDevice != null) {
+            fromDevice.moveTo(toDevice);
+            System.out.println("Moved resources from device instance with ID: " + fromObjectId + " to device instance with ID: " + toObjectId);
         } else {
-            System.out.println("No object found with ID: " + fromObjectId);
+            System.out.println("Invalid object IDs provided for move operation.");
         }
     }
 
-    public static class CustomDevice extends BaseInstanceEnabler {
-        private final Map<Integer, String> resources = new HashMap<>();
+    private static void printHelp() {
+        System.out.println("Commands:");
+        System.out.println("  list - List all objects, instances, and resources.");
+        System.out.println("  create <objectType> - Create a new instance of the specified object type.");
+        System.out.println("  delete <objectId> - Delete the instance with the specified object ID.");
+        System.out.println("  update <objectId> <resourceId> <value> - Update the resource with the specified ID and value.");
+        System.out.println("  collect <objectId> - Collect resources for the specified object ID.");
+        System.out.println("  move <fromObjectId> <toObjectId> - Move resources from one object to another.");
+        System.out.println("  help - Display this help message.");
+        System.out.println("  exit - Exit the client.");
+    }
+}
 
-        public CustomDevice() {
-            resources.put(0, "Kochar_C1");
-            resources.put(1, "Model_A1");
-        }
+class CustomDevice extends BaseInstanceEnabler {
+    private Map<Integer, String> resources = new HashMap<>();
+    private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
-        @Override
-        public ReadResponse read(ServerIdentity identity, int resourceId) {
-            if (resources.containsKey(resourceId)) {
-                return ReadResponse.success(resourceId, resources.get(resourceId));
-            } else {
-                return ReadResponse.notFound();
-            }
-        }
+    public CustomDevice() {
+        // Initialize your resources and set their default values
+        resources.put(0, "Example String");
+        resources.put(1, "1234"); // Example integer as a string
 
-        @Override
-        public WriteResponse write(ServerIdentity identity, int resourceId, LwM2mResource value) {
-            resources.put(resourceId, value.getValue().toString());
-            System.out.println("Write request received for resource id " + resourceId + " with value: " + value.getValue().toString());
-            return WriteResponse.success();
-        }
+        // Start a periodic task to simulate real-time data changes
+        scheduler.scheduleAtFixedRate(() -> {
+            // Update resources and notify the server
+            updateResource(1, String.valueOf((int) (Math.random() * 1000)));
+        }, 0, 5, TimeUnit.SECONDS); // Adjust the time interval as needed
+    }
 
-        @Override
-        public ExecuteResponse execute(ServerIdentity identity, int resourceId, String params) {
-            switch (resourceId) {
-                case 4:
-                    System.out.println("Reboot command received.");
-                    executeReboot();
-                    return ExecuteResponse.success();
-                case 5:
-                    System.out.println("Deregister command received.");
-                    executeDeregister();
-                    return ExecuteResponse.success();
-                default:
-                    return ExecuteResponse.notFound();
-            }
-        }
+    public void updateResource(int resourceId, String value) {
+        resources.put(resourceId, value);
+        fireResourcesChange(resourceId); // Notify the server of the change
+    }
 
-        private void executeReboot() {
-            new Thread(() -> {
-                try {
-                    Thread.sleep(1000);
-                    client.stop(true);
-                    main(new String[0]);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }).start();
+    @Override
+    public ReadResponse read(ServerIdentity identity, int resourceId) {
+        String value = resources.get(resourceId);
+        if (value != null) {
+            return ReadResponse.success(LwM2mSingleResource.newStringResource(resourceId, value));
+        } else {
+            return ReadResponse.notFound();
         }
+    }
 
-        private void executeDeregister() {
-            new Thread(() -> {
-                try {
-                    Thread.sleep(1000);
-                    client.stop(true);
-                    System.exit(0);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }).start();
-        }
+    @Override
+    public WriteResponse write(ServerIdentity identity, int resourceId, LwM2mResource value) {
+        // Handle write requests from the server if needed
+        return WriteResponse.success();
+    }
 
-        // Custom method to get resources
-        public Map<Integer, String> getResources() {
-            return resources;
+    public Map<Integer, String> getResources() {
+        return resources;
+    }
+
+    public void collectResources() {
+        // Implement your logic for collecting resources from the device
+        System.out.println("Collecting resources...");
+        // Example: Iterate over resources and perform some operation
+        for (Map.Entry<Integer, String> entry : resources.entrySet()) {
+            System.out.println("Resource ID: " + entry.getKey() + ", Value: " + entry.getValue());
         }
+    }
+
+    public void moveTo(CustomDevice targetDevice) {
+        // Implement your logic for moving resources to another device
+        System.out.println("Moving resources...");
+        // Example: Iterate over resources and move them to the target device
+        for (Map.Entry<Integer, String> entry : resources.entrySet()) {
+            targetDevice.updateResource(entry.getKey(), entry.getValue());
+        }
+        // Clear resources from the current device
+        resources.clear();
     }
 }
