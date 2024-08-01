@@ -181,8 +181,9 @@ class CustomDevice extends BaseInstanceEnabler {
 
     public CustomDevice() {
         // Initialize your resources and set their default values
-        resources.put(0, "Example String");
-        resources.put(1, "1234"); // Example integer as a string
+        resources.put(0, "Manufacturer - KocharTech");
+        resources.put(1, "Model - K1");
+        resources.put(2, "Version - 1.1");
 
         // Start a periodic task to simulate real-time data changes
         scheduler.scheduleAtFixedRate(() -> {
