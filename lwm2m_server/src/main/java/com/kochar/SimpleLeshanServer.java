@@ -162,7 +162,7 @@ public class SimpleLeshanServer {
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
 
         if (registration != null) {
-            System.out.println("Enter the resource path to cancel observation (e.g., /3/0/13 for battery level):");
+            System.out.println("Enter the resource path to cancel observation (e.g., /3/0/13 for Time):");
             String resourcePath = scanner.nextLine();
             try {
                 // Retrieve all observations for this registration
@@ -233,7 +233,7 @@ public class SimpleLeshanServer {
         Registration registration = server.getRegistrationService().getByEndpoint(endpoint);
 
         if (registration != null) {
-            System.out.println("Enter the resource path to observe (e.g., /3/0/13 for battery level):");
+            System.out.println("Enter the resource path to observe (e.g., /3/0/13 for Time):");
             String resourcePath = scanner.nextLine();
             try {
                 ObserveRequest request = new ObserveRequest(resourcePath);
@@ -261,13 +261,13 @@ public class SimpleLeshanServer {
 
         if (registration != null) {
             try {
-                ExecuteRequest request = new ExecuteRequest("/0/0"); // Assuming "/0/0" is the reboot resource path
+                ExecuteRequest request = new ExecuteRequest(3, 0, 4); // Reboot resource ID is 4
                 ExecuteResponse response = server.send(registration, request);
 
                 if (response.isSuccess()) {
-                    System.out.println("Device rebooted successfully.");
+                    System.out.println("Reboot command sent successfully to " + endpoint);
                 } else {
-                    System.out.println("Failed to reboot device: " + response.getCode() + " " + response.getErrorMessage());
+                    System.out.println("Failed to send reboot command: " + response.getCode() + " " + response.getErrorMessage());
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -276,6 +276,7 @@ public class SimpleLeshanServer {
             System.out.println("No device found with endpoint: " + endpoint);
         }
     }
+
 
     // Method to reboot the server
     private static void rebootServer() {
