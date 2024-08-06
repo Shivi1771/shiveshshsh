@@ -277,7 +277,6 @@ public class SimpleLeshanServer {
         }
     }
 
-
     // Method to reboot the server
     private static void rebootServer() {
         System.out.println("Rebooting the server...");

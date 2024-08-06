@@ -18,13 +18,14 @@ import org.eclipse.leshan.core.LwM2mId;
 import org.eclipse.leshan.core.node.LwM2mResource;
 import org.eclipse.leshan.core.node.LwM2mSingleResource;
 import org.eclipse.leshan.core.request.BindingMode;
+import org.eclipse.leshan.core.response.ExecuteResponse;
 import org.eclipse.leshan.core.response.ReadResponse;
 import org.eclipse.leshan.core.response.WriteResponse;
 
 public class SimpleLeshanClient {
 
     private static final String SERVER_URI = "coap://192.168.105.180:5683";
-    private static LeshanClient client;
+    static LeshanClient client;  // Make this accessible
     private static final Map<Integer, CustomDevice> devices = new HashMap<>();
     private static int nextInstanceId = 1;
 
@@ -40,7 +41,7 @@ public class SimpleLeshanClient {
         client.start();
 
         System.out.println("Leshan client started. Endpoint: " + endpoint);
-        printHelp();                                                                                                
+        printHelp();
 
         // Command-line interface
         Scanner scanner = new Scanner(System.in);
@@ -173,6 +174,34 @@ public class SimpleLeshanClient {
         System.out.println("  help - Display this help message.");
         System.out.println("  exit - Exit the client.");
     }
+
+    // Add the reboot handling method
+    public static void handleReboot() {
+        Thread rebootThread = new Thread(() -> {
+            try {
+                Thread.sleep(1000); // Delay for simulation
+                client.stop(true); // Stop the client with deregistration
+                main(new String[0]); // Restart the client
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
+        rebootThread.start();
+    }
+
+    // Add the deregistration handling method
+    public static void handleDeregistration() {
+        Thread deregisterThread = new Thread(() -> {
+            try {
+                Thread.sleep(1000); // Delay for simulation
+                client.stop(true); // Stop the client with deregistration
+                System.exit(0); // Exit the application after deregistration
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
+        deregisterThread.start();
+    }
 }
 
 class CustomDevice extends BaseInstanceEnabler {
@@ -182,58 +211,76 @@ class CustomDevice extends BaseInstanceEnabler {
     public CustomDevice() {
         // Initialize your resources and set their default values
         resources.put(0, "Manufacturer - KocharTech");
-        resources.put(1, "Model - K1");
-        resources.put(2, "Version - 1.1");
-
-        // Start a periodic task to simulate real-time data changes
-        scheduler.scheduleAtFixedRate(() -> {
-            // Update resources and notify the server
-            updateResource(1, String.valueOf((int) (Math.random() * 1000)));
-        }, 0, 5, TimeUnit.SECONDS); // Adjust the time interval as needed
-    }
-
-    public void updateResource(int resourceId, String value) {
-        resources.put(resourceId, value);
-        fireResourcesChange(resourceId); // Notify the server of the change
+        resources.put(1, "Model Number - K1234");
+        resources.put(2, "Firmware Version - 1.0.0");
+        // Schedule a task to update resource values
+        scheduler.scheduleAtFixedRate(() -> updateResourceValues(), 0, 5, TimeUnit.SECONDS);
     }
 
     @Override
     public ReadResponse read(ServerIdentity identity, int resourceId) {
-        String value = resources.get(resourceId);
-        if (value != null) {
-            return ReadResponse.success(LwM2mSingleResource.newStringResource(resourceId, value));
+        System.out.println("Read request received for resource ID: " + resourceId);
+        switch (resourceId) {
+            case 0:
+            case 1:
+            case 2:
+                return ReadResponse.success(resourceId, resources.get(resourceId));
+            default:
+                return ReadResponse.notFound();
+        }
+    }
+
+    @Override
+    public ExecuteResponse execute(ServerIdentity identity, int resourceId, String params) {
+        System.out.println("Execute request received for resource ID: " + resourceId);
+        if (resourceId == 4) {  // Assuming resource ID 4 is for reboot
+            SimpleLeshanClient.handleReboot();
+            return ExecuteResponse.success();
+        } else if (resourceId == 5) {  // Assuming resource ID 5 is for deregistration
+            SimpleLeshanClient.handleDeregistration();
+            return ExecuteResponse.success();
         } else {
-            return ReadResponse.notFound();
+            return ExecuteResponse.notFound();
         }
     }
 
     @Override
     public WriteResponse write(ServerIdentity identity, int resourceId, LwM2mResource value) {
-        // Handle write requests from the server if needed
-        return WriteResponse.success();
+        System.out.println("Write request received for resource ID: " + resourceId + ", value: " + value);
+        if (value instanceof LwM2mSingleResource) {
+            LwM2mSingleResource singleResource = (LwM2mSingleResource) value;
+            resources.put(resourceId, singleResource.getValue().toString());
+            return WriteResponse.success();
+        } else {
+            return WriteResponse.badRequest("Invalid resource type");
+        }
     }
 
-    public Map<Integer, String> getResources() {
-        return resources;
+    public void updateResource(int resourceId, String value) {
+        resources.put(resourceId, value);
+        fireResourcesChange(resourceId);
     }
 
     public void collectResources() {
-        // Implement your logic for collecting resources from the device
-        System.out.println("Collecting resources...");
-        // Example: Iterate over resources and perform some operation
+        System.out.println("Collecting resources for CustomDevice.");
         for (Map.Entry<Integer, String> entry : resources.entrySet()) {
             System.out.println("Resource ID: " + entry.getKey() + ", Value: " + entry.getValue());
         }
     }
 
     public void moveTo(CustomDevice targetDevice) {
-        // Implement your logic for moving resources to another device
-        System.out.println("Moving resources...");
-        // Example: Iterate over resources and move them to the target device
-        for (Map.Entry<Integer, String> entry : resources.entrySet()) {
-            targetDevice.updateResource(entry.getKey(), entry.getValue());
-        }
-        // Clear resources from the current device
-        resources.clear();
+        targetDevice.resources.putAll(this.resources);
+        this.resources.clear();
+        fireResourcesChange();
+    }
+
+    private void updateResourceValues() {
+        // Simulate resource value updates
+        resources.put(2, "Version - " + (1.1 + Math.random()));
+        fireResourcesChange(2);
+    }
+
+    public Map<Integer, String> getResources() {
+        return resources;
     }
 }
