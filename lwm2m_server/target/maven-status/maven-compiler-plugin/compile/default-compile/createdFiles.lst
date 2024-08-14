@@ -1,2 +1,13 @@
+com\kochar\controller\DeviceDeleteController.class
+com\kochar\controller\DeviceController.class
+com\kochar\config\LeshanServerConfig.class
+com\kochar\controller\ObservationController.class
+com\kochar\controller\DeviceReadController.class
+com\kochar\controller\DeviceDeregisterController.class
+com\kochar\controller\DeviceWriteController.class
+com\kochar\SimpleLeshanServer$2.class
+com\kochar\LeshanApiApplication.class
 com\kochar\SimpleLeshanServer$1.class
+com\kochar\controller\DeviceCreateController.class
+com\kochar\controller\DeviceRebootController.class
 com\kochar\SimpleLeshanServer.class

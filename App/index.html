@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kochar Infotech Ltd. LwM2M Management Platform</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.2.2/axios.min.js"></script>
+    <style>
+        .card-body pre {
+            white-space: pre-wrap; /* Allows long lines to wrap */
+            word-wrap: break-word; /* Breaks long words */
+            background-color: #f8f9fa; /* Light background for better readability */
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <app-component></app-component>
+    </div>
+
+    <script>
+        Vue.component('app-component', {
+            template: `
+                <div class="container mt-4">
+                    <header class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h1 class="display-4">Kochar Infotech LwM2M Management Platform</h1>
+                            <button class="btn btn-primary" @click="refreshPage">Refresh</button>
+                        </div>
+                    </header>
+
+                    <div class="row">
+                        <!-- List Devices Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-list"></i> List Devices</h5>
+                                    <button class="btn btn-outline-info" @click="listAllDevices">List Devices</button>
+                                    <pre class="mt-3">{{ devicesResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Observe Resource Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-eye"></i> Observe Resource</h5>
+                                    <input type="text" v-model="observeEndpoint" class="form-control mb-2" placeholder="Endpoint">
+                                    <input type="text" v-model="observeResourcePath" class="form-control mb-2" placeholder="Resource Path">
+                                    <button class="btn btn-outline-info" @click="observeDevice">Observe</button>
+                                    <pre class="mt-3">{{ observeResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cancel Observation Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-ban"></i> Cancel Observation</h5>
+                                    <input type="text" v-model="cancelEndpoint" class="form-control mb-2" placeholder="Endpoint">
+                                    <input type="text" v-model="cancelResourcePath" class="form-control mb-2" placeholder="Resource Path">
+                                    <button class="btn btn-outline-info" @click="cancelObservation">Cancel</button>
+                                    <pre class="mt-3">{{ cancelResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reboot Device Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-undo"></i> Reboot Device</h5>
+                                    <input type="text" v-model="rebootDeviceId" class="form-control mb-2" placeholder="Device ID">
+                                    <button class="btn btn-outline-info" @click="rebootDevice">Reboot</button>
+                                    <pre class="mt-3">{{ rebootResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reboot Server Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-power-off"></i> Reboot Server</h5>
+                                    <button class="btn btn-outline-info" @click="rebootServer">Reboot Server</button>
+                                    <pre class="mt-3">{{ rebootServerResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Deregister Device Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-user-slash"></i> Deregister Device</h5>
+                                    <input type="text" v-model="deregisterDeviceId" class="form-control mb-2" placeholder="Device ID">
+                                    <button class="btn btn-outline-info" @click="deregisterDevice">Deregister</button>
+                                    <pre class="mt-3">{{ deregisterResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Write Resource Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-pencil-alt"></i> Write Resource</h5>
+                                    <input type="text" v-model="writeEndpoint" class="form-control mb-2" placeholder="Endpoint">
+                                    <input type="text" v-model="writeResourcePath" class="form-control mb-2" placeholder="Resource Path">
+                                    <input type="text" v-model="writeValue" class="form-control mb-2" placeholder="Value">
+                                    <button class="btn btn-outline-info" @click="writeResource">Write</button>
+                                    <pre class="mt-3">{{ writeResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Create Resource Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-plus"></i> Create Resource</h5>
+                                    <input type="text" v-model="createEndpoint" class="form-control mb-2" placeholder="Endpoint">
+                                    <input type="text" v-model="createObjectId" class="form-control mb-2" placeholder="Object ID">
+                                    <input type="text" v-model="createInstanceId" class="form-control mb-2" placeholder="Instance ID">
+                                    <button class="btn btn-outline-info" @click="createInstance">Create</button>
+                                    <pre class="mt-3">{{ createResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Discover Resources Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-search"></i> Discover Resources</h5>
+                                    <input type="text" v-model="resourceEndpoint" class="form-control mb-2" placeholder="Endpoint">
+                                    <input type="text" v-model="resourcePath" class="form-control mb-2" placeholder="Resource Path">
+                                    <button class="btn btn-outline-info" @click="discoverResources">Discover</button>
+                                    <pre class="mt-3">{{ discoverResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Read Resource Component -->
+                        <div class="col-lg-3 col-md-6 mb-3">
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-book"></i> Read Resource</h5>
+                                    <input type="text" v-model="readDeviceId" class="form-control mb-2" placeholder="Device ID">
+                                    <input type="text" v-model="readResourceId" class="form-control mb-2" placeholder="Resource ID">
+                                    <button class="btn btn-outline-info" @click="readResource">Read</button>
+                                    <pre class="mt-3">{{ readResult }}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `,
+            data() {
+                return {
+                    observeEndpoint: '',
+                    observeResourcePath: '',
+                    cancelEndpoint: '',
+                    cancelResourcePath: '',
+                    rebootDeviceId: '',
+                    deregisterDeviceId: '',
+                    writeEndpoint: '',
+                    writeResourcePath: '',
+                    writeValue: '',
+                    createEndpoint: '',
+                    createObjectId: '',
+                    createInstanceId: '',
+                    resourceEndpoint: '',
+                    resourcePath: '',
+                    readDeviceId: '',
+                    readResourceId: '',
+                    devicesResult: '',
+                    observeResult: '',
+                    cancelResult: '',
+                    rebootResult: '',
+                    rebootServerResult: '',
+                    deregisterResult: '',
+                    writeResult: '',
+                    createResult: '',
+                    discoverResult: '',
+                    readResult: ''
+                };
+            },
+            methods: {
+                refreshPage() {
+                    window.location.reload();
+                },
+                listAllDevices() {
+                    axios.get('http://localhost:8080/api/devices/list')
+                        .then(response => {
+                            this.devicesResult = `Devices: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.devicesResult = `Error: ${error.message}`;
+                        });
+                },
+                observeDevice() {
+                    axios.post('/api/device/observe', {
+                        endpoint: this.observeEndpoint,
+                        resourcePath: this.observeResourcePath
+                    })
+                        .then(response => {
+                            this.observeResult = `Observe Result: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.observeResult = `Error: ${error.message}`;
+                        });
+                },
+                cancelObservation() {
+                    axios.post('/api/device/observe/cancel', {
+                        endpoint: this.cancelEndpoint,
+                        resourcePath: this.cancelResourcePath
+                    })
+                        .then(response => {
+                            this.cancelResult = `Cancel Result: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.cancelResult = `Error: ${error.message}`;
+                        });
+                },
+                rebootDevice() {
+                    axios.post(`http://localhost:8080/api/device/reboot/${this.rebootDeviceId}`)
+                        .then(response => {
+                            this.rebootResult = `Reboot Result: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.rebootResult = `Error: ${error.message}`;
+                        });
+                },
+                rebootServer() {
+                    axios.post('/api/server/reboot')
+                        .then(response => {
+                            this.rebootServerResult = `Reboot Server Result: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.rebootServerResult = `Error: ${error.message}`;
+                        });
+                },
+                deregisterDevice() {
+                    axios.post(`/api/device/deregister/${this.deregisterDeviceId}`)
+                        .then(response => {
+                            this.deregisterResult = `Deregister Result: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.deregisterResult = `Error: ${error.message}`;
+                        });
+                },
+                writeResource() {
+                    axios.post('/api/device/write', {
+                        endpoint: this.writeEndpoint,
+                        resourcePath: this.writeResourcePath,
+                        value: this.writeValue
+                    })
+                        .then(response => {
+                            this.writeResult = `Write Result: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.writeResult = `Error: ${error.message}`;
+                        });
+                },
+                createInstance() {
+                    axios.post('/api/device/create', {
+                        endpoint: this.createEndpoint,
+                        objectId: this.createObjectId,
+                        instanceId: this.createInstanceId
+                    })
+                        .then(response => {
+                            this.createResult = `Create Result: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.createResult = `Error: ${error.message}`;
+                        });
+                },
+                discoverResources() {
+                    axios.post('/api/device/discover', {
+                        endpoint: this.resourceEndpoint,
+                        resourcePath: this.resourcePath
+                    })
+                        .then(response => {
+                            this.discoverResult = `Discover Result: ${JSON.stringify(response.data, null, 2)}`;
+                        })
+                        .catch(error => {
+                            this.discoverResult = `Error: ${error.message}`;
+                        });
+                },
+                readResource() {
+                    axios.get(`http://localhost:8080/api/device/read/${this.readDeviceId}/${this.readResourceId}`)
+                        .then(response => {
+                            this.readResult = `Read Result: ${response.data}`;
+                        })
+                        .catch(error => {
+                            this.readResult = `Error: ${error.message}`;
+                        });
+                }
+            }
+        });
+
+        new Vue({
+            el: '#app'
+        });
+    </script>
+</body>
+</html>
